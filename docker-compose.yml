@@ -1,0 +1,60 @@
+# Sunrise Microfinance — Borrower Management Sandbox
+# Brings up: PostgreSQL (borrower data), the web app (port 8000), and
+# a one-shot seeding job that populates 500+ synthetic borrower records.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sunrise-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sunrise
+      POSTGRES_PASSWORD: sunrisepass
+      POSTGRES_DB: sunrise_sandbox
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sunrise -d sunrise_sandbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  seed:
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile.seed
+    container_name: sunrise-seed
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: sunrise
+      DB_PASSWORD: sunrisepass
+      DB_NAME: sunrise_sandbox
+      RECORD_COUNT: 500
+    restart: "no"
+
+  app:
+    build: .
+    container_name: sunrise-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: sunrise
+      DB_PASSWORD: sunrisepass
+      DB_NAME: sunrise_sandbox
+      PORT: 8000
+    ports:
+      - "8000:8000"
+
+volumes:
+  db-data:
